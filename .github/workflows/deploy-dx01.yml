@@ -24,7 +24,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: tx01-nginx
-  IMAGE_TAG: dx01-${{ github.sha }}
+  IMAGE_TAG: dx01-${{ github.sha }}-${{ github.run_number }}
 
 jobs:
   build-and-push:
