@@ -135,9 +135,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.get-instance.outputs.ip }} << EOF
             set -e
             
-            echo "🛑 Stopping existing container..."
-            sudo docker stop dx01 2>/dev/null || true
-            sudo docker rm dx01 2>/dev/null || true
+            echo "🛑 Stopping all containers on port 80..."
+            sudo docker ps -q | xargs -r sudo docker stop || true
+            sudo docker ps -aq | xargs -r sudo docker rm || true
             
             echo "🗑️ Cleaning old images..."
             sudo docker image prune -af
