@@ -126,7 +126,7 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.get-instance.outputs.ip }} << 'EOF'
             aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-              docker login --username AWS --password-stdin \
+              sudo docker login --username AWS --password-stdin \
               ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           EOF
 
@@ -136,17 +136,17 @@ jobs:
             set -e
             
             echo "🛑 Stopping existing container..."
-            docker stop dx01 2>/dev/null || true
-            docker rm dx01 2>/dev/null || true
+            sudo docker stop dx01 2>/dev/null || true
+            sudo docker rm dx01 2>/dev/null || true
             
             echo "🗑️ Cleaning old images..."
-            docker image prune -af
+            sudo docker image prune -af
             
             echo "📥 Pulling new image..."
-            docker pull ${{ needs.build-and-push.outputs.image }}
+            sudo docker pull ${{ needs.build-and-push.outputs.image }}
             
             echo "🚀 Starting new container..."
-            docker run -d \
+            sudo docker run -d \
               --name dx01 \
               --restart unless-stopped \
               -p 80:80 \
@@ -157,12 +157,12 @@ jobs:
             echo "⏳ Waiting for container to be healthy..."
             sleep 10
             
-            if docker ps | grep -q dx01; then
+            if sudo docker ps | grep -q dx01; then
               echo "✅ Container is running"
-              docker logs --tail 20 dx01
+              sudo docker logs --tail 20 dx01
             else
               echo "❌ Container failed to start"
-              docker logs dx01
+              sudo docker logs dx01
               exit 1
             fi
           EOF
