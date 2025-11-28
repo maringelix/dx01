@@ -34,6 +34,15 @@ app.get('/api', (req, res) => {
   });
 });
 
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    message: 'API está funcionando! 🚀',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 app.get('/api/users', (req, res) => {
   res.json({
     users: [
