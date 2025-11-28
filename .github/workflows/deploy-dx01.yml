@@ -1,0 +1,229 @@
+name: 🚀 Deploy DX01 to AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - 'docker/**'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-dx01.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'stg'
+        type: choice
+        options:
+          - stg
+          - prd
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: tx01-nginx
+  IMAGE_TAG: dx01-${{ github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build and Push to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔑 AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🔐 Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏗️ Build Docker Image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "Building Docker image..."
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: 🔍 Scan Image for Vulnerabilities
+        continue-on-error: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --severity HIGH,CRITICAL \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: 📤 Push to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "Pushing image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  deploy-to-ec2:
+    name: Deploy to EC2 Instances
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        instance: [1, 2]
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔑 AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🔍 Get EC2 Instance IP
+        id: get-ip
+        run: |
+          ENV="${{ github.event.inputs.environment || 'stg' }}"
+          INSTANCE_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=tx01-web-${ENV}-${{ matrix.instance }}" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          
+          if [ -z "$INSTANCE_IP" ] || [ "$INSTANCE_IP" = "None" ]; then
+            echo "❌ Could not find EC2 instance"
+            exit 1
+          fi
+          
+          echo "ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+          echo "✅ Found EC2 instance: $INSTANCE_IP"
+
+      - name: 🔐 Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ steps.get-ip.outputs.ip }} >> ~/.ssh/known_hosts
+
+      - name: 🔐 Login to ECR on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ steps.get-ip.outputs.ip }} << 'EOF'
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+              docker login --username AWS --password-stdin \
+              ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          EOF
+
+      - name: 🚀 Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ steps.get-ip.outputs.ip }} << EOF
+            set -e
+            
+            echo "🛑 Stopping existing container..."
+            docker stop dx01 2>/dev/null || true
+            docker rm dx01 2>/dev/null || true
+            
+            echo "🗑️ Cleaning old images..."
+            docker image prune -af
+            
+            echo "📥 Pulling new image..."
+            docker pull ${{ needs.build-and-push.outputs.image }}
+            
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name dx01 \
+              --restart unless-stopped \
+              -p 80:80 \
+              -e NODE_ENV=production \
+              -e PORT=5000 \
+              ${{ needs.build-and-push.outputs.image }}
+            
+            echo "⏳ Waiting for container to be healthy..."
+            sleep 10
+            
+            if docker ps | grep -q dx01; then
+              echo "✅ Container is running"
+              docker logs --tail 20 dx01
+            else
+              echo "❌ Container failed to start"
+              docker logs dx01
+              exit 1
+            fi
+          EOF
+
+      - name: 🧪 Health Check
+        run: |
+          sleep 5
+          for i in {1..10}; do
+            if curl -f http://${{ steps.get-ip.outputs.ip }}/health; then
+              echo "✅ Health check passed on EC2 instance ${{ matrix.instance }}"
+              exit 0
+            fi
+            echo "⏳ Waiting for application... ($i/10)"
+            sleep 3
+          done
+          echo "❌ Health check failed"
+          exit 1
+
+  verify-alb:
+    name: Verify ALB Health
+    needs: deploy-to-ec2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🔑 AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🔍 Get ALB DNS
+        id: get-alb
+        run: |
+          ENV="${{ github.event.inputs.environment || 'stg' }}"
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names "tx01-alb-${ENV}" \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+          echo "dns=$ALB_DNS" >> $GITHUB_OUTPUT
+          echo "✅ ALB DNS: $ALB_DNS"
+
+      - name: ⏳ Wait for Target Health
+        run: |
+          echo "Waiting for targets to become healthy..."
+          sleep 30
+
+      - name: 🧪 Test ALB Endpoint
+        run: |
+          for i in {1..20}; do
+            if curl -f http://${{ steps.get-alb.outputs.dns }}/health; then
+              echo "✅ ALB health check passed"
+              exit 0
+            fi
+            echo "⏳ Waiting for ALB... ($i/20)"
+            sleep 10
+          done
+          echo "❌ ALB health check failed"
+          exit 1
+
+      - name: 📊 Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'stg' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ needs.build-and-push.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "**ALB URL:** http://${{ steps.get-alb.outputs.dns }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Application deployed successfully to both EC2 instances!" >> $GITHUB_STEP_SUMMARY
