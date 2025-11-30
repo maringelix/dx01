@@ -24,8 +24,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install nginx for serving frontend and proxying backend
-RUN apk add --no-cache nginx
+# Install nginx and wget for serving frontend and proxying backend
+RUN apk add --no-cache nginx wget
 
 # Copy backend files
 COPY --from=builder /app/server ./server
