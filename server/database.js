@@ -21,9 +21,6 @@ const dbConfig = {
   max: 20, // Maximum number of connections in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com') 
-    ? { rejectUnauthorized: false } 
-    : false,
 };
 
 // Create connection pool
