@@ -136,70 +136,37 @@ jobs:
           RDS_ENDPOINT: ${{ steps.get-rds.outputs.endpoint }}
           SECRET_ARN: ${{ steps.get-rds.outputs.secret_arn }}
           IMAGE: ${{ needs.build-and-push.outputs.image }}
+          AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           echo "🔄 Deploying to instance $INSTANCE_ID"
           
-          # Create deployment script
-          DEPLOY_SCRIPT=$(cat << 'EOFSCRIPT'
-          #!/bin/bash
-          set -e
-          
-          echo "📥 Logging into ECR..."
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-          
-          echo "🛑 Stopping old dx01 container if exists..."
-          docker stop dx01-app 2>/dev/null || true
-          docker rm dx01-app 2>/dev/null || true
-          
-          echo "🔽 Pulling latest image..."
-          docker pull IMAGE_PLACEHOLDER
-          
-          echo "🔐 Getting database credentials..."
-          DB_CREDS=$(aws secretsmanager get-secret-value --secret-id "SECRET_ARN_PLACEHOLDER" --region us-east-1 --query SecretString --output text)
-          DB_USER=$(echo "$DB_CREDS" | jq -r '.username')
-          DB_PASSWORD=$(echo "$DB_CREDS" | jq -r '.password')
-          DB_NAME=$(echo "$DB_CREDS" | jq -r '.dbname // "postgres"')
-          
-          echo "🚀 Starting new container..."
-          docker run -d \
-            --name dx01-app \
-            --restart unless-stopped \
-            -p 8080:80 \
-            -p 3001:3001 \
-            -e NODE_ENV=production \
-            -e DB_HOST="RDS_ENDPOINT_PLACEHOLDER" \
-            -e DB_PORT=5432 \
-            -e DB_NAME="$DB_NAME" \
-            -e DB_USER="$DB_USER" \
-            -e DB_PASSWORD="$DB_PASSWORD" \
-            IMAGE_PLACEHOLDER
-          
-          echo "⏳ Waiting for container to start..."
-          sleep 15
-          
-          if docker ps | grep -q dx01-app; then
-            echo "✅ Container is running"
-            docker logs dx01-app --tail 30
-          else
-            echo "❌ Container failed to start"
-            docker logs dx01-app --tail 50 || true
-            exit 1
-          fi
-          EOFSCRIPT
-          )
-          
-          # Replace placeholders
-          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//IMAGE_PLACEHOLDER/$IMAGE}"
-          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//SECRET_ARN_PLACEHOLDER/$SECRET_ARN}"
-          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//RDS_ENDPOINT_PLACEHOLDER/$RDS_ENDPOINT}"
-          
-          # Execute via SSM
-          echo "📤 Sending command to instance..."
+          # Execute via SSM with proper escaping
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy DX01 Application" \
-            --parameters commands="$DEPLOY_SCRIPT" \
+            --parameters '{
+              "commands": [
+                "set -e",
+                "echo \"📥 Logging into ECR...\"",
+                "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin '"$AWS_ACCOUNT"'.dkr.ecr.us-east-1.amazonaws.com",
+                "echo \"🛑 Stopping old dx01 container if exists...\"",
+                "docker stop dx01-app 2>/dev/null || true",
+                "docker rm dx01-app 2>/dev/null || true",
+                "echo \"🔽 Pulling image: '"$IMAGE"'\"",
+                "docker pull '"$IMAGE"'",
+                "echo \"🔐 Getting database credentials...\"",
+                "DB_CREDS=$(aws secretsmanager get-secret-value --secret-id '"$SECRET_ARN"' --region us-east-1 --query SecretString --output text)",
+                "DB_USER=$(echo \"$DB_CREDS\" | jq -r .username)",
+                "DB_PASSWORD=$(echo \"$DB_CREDS\" | jq -r .password)",
+                "DB_NAME=$(echo \"$DB_CREDS\" | jq -r \".dbname // \\\"postgres\\\"\")",
+                "echo \"🚀 Starting new container...\"",
+                "docker run -d --name dx01-app --restart unless-stopped -p 8080:80 -p 3001:3001 -e NODE_ENV=production -e DB_HOST='"$RDS_ENDPOINT"' -e DB_PORT=5432 -e DB_NAME=\"$DB_NAME\" -e DB_USER=\"$DB_USER\" -e DB_PASSWORD=\"$DB_PASSWORD\" '"$IMAGE"'",
+                "echo \"⏳ Waiting 15 seconds...\"",
+                "sleep 15",
+                "if docker ps | grep -q dx01-app; then echo \"✅ Container is running\"; docker logs dx01-app --tail 30; else echo \"❌ Container failed\"; docker logs dx01-app --tail 50 || true; exit 1; fi"
+              ]
+            }' \
             --query 'Command.CommandId' \
             --output text)
           
