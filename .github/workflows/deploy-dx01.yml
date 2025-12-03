@@ -148,6 +148,8 @@ jobs:
             --parameters '{
               "commands": [
                 "set -e",
+                "echo \"🔧 Installing dependencies...\"",
+                "sudo apt-get update -qq && sudo apt-get install -y -qq jq > /dev/null 2>&1 || echo \"jq already installed\"",
                 "echo \"📥 Logging into ECR...\"",
                 "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin '"$AWS_ACCOUNT"'.dkr.ecr.us-east-1.amazonaws.com",
                 "echo \"🛑 Stopping old dx01 container if exists...\"",
