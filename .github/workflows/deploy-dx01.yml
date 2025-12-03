@@ -23,8 +23,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: tx01-nginx
-  IMAGE_TAG: dx01-${{ github.sha }}-${{ github.run_number }}
+  ECR_REPOSITORY: dx01-app
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_number }}
 
 jobs:
   build-and-push:
@@ -55,7 +55,9 @@ jobs:
         run: |
           echo "Building Docker image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_OUTPUT
 
       - name: 🔍 Scan Image for Vulnerabilities
         continue-on-error: true
@@ -68,8 +70,10 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          echo "Pushing image to ECR..."
+          echo "Pushing images to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "✅ Images pushed: $IMAGE_TAG and latest"
 
   deploy-to-ec2:
     name: Deploy to EC2 Instances
@@ -100,77 +104,146 @@ jobs:
             --query 'Reservations[0].Instances[0].InstanceId' \
             --output text)
           
-          INSTANCE_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=tx01-ec2-${{ matrix.instance }}-${ENV}" \
-                      "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' \
-            --output text)
-          
           if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
             echo "❌ Could not find EC2 instance with name: tx01-ec2-${{ matrix.instance }}-${ENV}"
             exit 1
           fi
           
           echo "id=$INSTANCE_ID" >> $GITHUB_OUTPUT
-          echo "ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
-          echo "✅ Found EC2 instance: $INSTANCE_ID ($INSTANCE_IP)"
+          echo "✅ Found EC2 instance: $INSTANCE_ID"
 
-      - name: 🔐 Setup SSH Key
+      - name: 🗄️ Get RDS Endpoint
+        id: get-rds
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ steps.get-instance.outputs.ip }} >> ~/.ssh/known_hosts
+          ENV="${{ github.event.inputs.environment || 'stg' }}"
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "tx01-db-${ENV}" \
+            --query 'DBInstances[0].Endpoint.Address' \
+            --output text)
+          
+          SECRET_ARN=$(aws secretsmanager list-secrets \
+            --filters Key=name,Values="tx01-db-credentials-${ENV}-v2" \
+            --query 'SecretList[0].ARN' \
+            --output text)
+          
+          echo "endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "secret_arn=$SECRET_ARN" >> $GITHUB_OUTPUT
+          echo "✅ RDS Endpoint: $RDS_ENDPOINT"
 
-      - name: 🔐 Login to ECR on EC2
+      - name: 🚀 Deploy via SSM
+        env:
+          INSTANCE_ID: ${{ steps.get-instance.outputs.id }}
+          RDS_ENDPOINT: ${{ steps.get-rds.outputs.endpoint }}
+          SECRET_ARN: ${{ steps.get-rds.outputs.secret_arn }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.get-instance.outputs.ip }} << 'EOF'
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-              sudo docker login --username AWS --password-stdin \
-              ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-          EOF
-
-      - name: 🚀 Deploy to EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.get-instance.outputs.ip }} << EOF
-            set -e
+          echo "🔄 Deploying to instance $INSTANCE_ID"
+          
+          # Create deployment script
+          DEPLOY_SCRIPT=$(cat << 'EOFSCRIPT'
+          #!/bin/bash
+          set -e
+          
+          echo "📥 Logging into ECR..."
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+          
+          echo "🛑 Stopping old dx01 container if exists..."
+          docker stop dx01-app 2>/dev/null || true
+          docker rm dx01-app 2>/dev/null || true
+          
+          echo "🔽 Pulling latest image..."
+          docker pull IMAGE_PLACEHOLDER
+          
+          echo "🔐 Getting database credentials..."
+          DB_CREDS=$(aws secretsmanager get-secret-value --secret-id "SECRET_ARN_PLACEHOLDER" --region us-east-1 --query SecretString --output text)
+          DB_USER=$(echo "$DB_CREDS" | jq -r '.username')
+          DB_PASSWORD=$(echo "$DB_CREDS" | jq -r '.password')
+          DB_NAME=$(echo "$DB_CREDS" | jq -r '.dbname // "postgres"')
+          
+          echo "🚀 Starting new container..."
+          docker run -d \
+            --name dx01-app \
+            --restart unless-stopped \
+            -p 8080:80 \
+            -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e DB_HOST="RDS_ENDPOINT_PLACEHOLDER" \
+            -e DB_PORT=5432 \
+            -e DB_NAME="$DB_NAME" \
+            -e DB_USER="$DB_USER" \
+            -e DB_PASSWORD="$DB_PASSWORD" \
+            IMAGE_PLACEHOLDER
+          
+          echo "⏳ Waiting for container to start..."
+          sleep 15
+          
+          if docker ps | grep -q dx01-app; then
+            echo "✅ Container is running"
+            docker logs dx01-app --tail 30
+          else
+            echo "❌ Container failed to start"
+            docker logs dx01-app --tail 50 || true
+            exit 1
+          fi
+          EOFSCRIPT
+          )
+          
+          # Replace placeholders
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//IMAGE_PLACEHOLDER/$IMAGE}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//SECRET_ARN_PLACEHOLDER/$SECRET_ARN}"
+          DEPLOY_SCRIPT="${DEPLOY_SCRIPT//RDS_ENDPOINT_PLACEHOLDER/$RDS_ENDPOINT}"
+          
+          # Execute via SSM
+          echo "📤 Sending command to instance..."
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy DX01 Application" \
+            --parameters commands="$DEPLOY_SCRIPT" \
+            --query 'Command.CommandId' \
+            --output text)
+          
+          echo "📋 Command ID: $COMMAND_ID"
+          echo "⏳ Waiting for execution (max 5 minutes)..."
+          
+          # Wait for command to complete
+          for i in {1..60}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo "Pending")
             
-            echo "🛑 Stopping all containers on port 80..."
-            sudo docker ps -q | xargs -r sudo docker stop || true
-            sudo docker ps -aq | xargs -r sudo docker rm || true
+            echo "⏱️  $i/60 - Status: $STATUS"
             
-            echo "🗑️ Cleaning old images..."
-            sudo docker image prune -af
-            
-            echo "📥 Pulling new image..."
-            sudo docker pull ${{ needs.build-and-push.outputs.image }}
-            
-            echo "🚀 Starting new container..."
-            sudo docker run -d \
-              --name dx01 \
-              --restart unless-stopped \
-              -p 80:80 \
-              -e NODE_ENV=production \
-              -e PORT=5000 \
-              ${{ needs.build-and-push.outputs.image }}
-            
-            echo "⏳ Waiting for container to be healthy..."
-            sleep 10
-            
-            if sudo docker ps | grep -q dx01; then
-              echo "✅ Container is running"
-              sudo docker logs --tail 20 dx01
-            else
-              echo "❌ Container failed to start"
-              sudo docker logs dx01
+            if [ "$STATUS" = "Success" ]; then
+              echo "✅ Deployment successful on instance ${{ matrix.instance }}!"
+              echo ""
+              echo "📋 Output:"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query 'StandardOutputContent' \
+                --output text
+              exit 0
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "❌ Deployment failed on instance ${{ matrix.instance }}!"
+              echo ""
+              echo "📋 Error output:"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query 'StandardErrorContent' \
+                --output text
               exit 1
             fi
-          EOF
+            
+            sleep 5
+          done
+          
+          echo "⏰ Timeout waiting for deployment"
+          exit 1
 
-      - name: ✅ Container Status
-        run: |
-          echo "✅ Container deployed to EC2 instance ${{ matrix.instance }}"
-          echo "Note: Direct health check skipped (port 80 only accessible via ALB)"
 
   verify-alb:
     name: Verify ALB Health
