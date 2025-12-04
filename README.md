@@ -8,6 +8,32 @@
 
 Uma aplicação fullstack moderna com React + Vite no frontend e Node.js + Express no backend, pronta para deploy em produção.
 
+---
+
+## ⚠️ **Important Security Notice**
+
+> 🔒 **This is a demonstration/portfolio project for learning purposes.**
+
+**Security Best Practices:**
+
+- ⚠️ **DO NOT** hardcode database credentials or API keys in the code
+- ✅ Use environment variables (`.env` files) for local development
+- ✅ Use **AWS Secrets Manager** or **GitHub Secrets** for production
+- ✅ The `.env` file is in `.gitignore` and never committed
+- ✅ Use `.env.example` as a template (no real credentials)
+- ✅ Review and adjust CORS settings for your domain
+- ✅ Implement rate limiting and input validation in production
+- ✅ Enable HTTPS/TLS for all production traffic
+
+**Database Connection:**
+- Local: Uses environment variables from `.env`
+- Production: Credentials injected via Kubernetes Secrets (from AWS RDS)
+- No credentials are stored in the code or repository
+
+**This project is safe to share publicly** - All sensitive data is properly externalized.
+
+---
+
 ## 📋 Índice
 
 - [Sobre](#sobre)
