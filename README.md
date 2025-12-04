@@ -12,6 +12,7 @@ Uma aplicação fullstack moderna com React + Vite no frontend e Node.js + Expre
 
 - [Sobre](#sobre)
 - [Code Quality](#-code-quality)
+- [Testing](#-testing)
 - [Tecnologias](#tecnologias)
 - [Pré-requisitos](#pré-requisitos)
 - [Instalação](#instalação)
@@ -40,13 +41,53 @@ DX01 é uma aplicação fullstack completa que demonstra:
 | **Security** | 🟢 A | 0 | Perfect |
 | **Reliability** | 🟢 A | 4 | Excellent |
 | **Maintainability** | 🟢 A | 8 | Excellent |
-| **Coverage** | ⚪ 0.0% | - | No tests yet |
+| **Coverage** | 🟡 ~35% | - | Basic tests implemented |
 | **Duplications** | 🟢 0.0% | 0 | No duplicates |
 | **Lines of Code** | 📝 833 | - | React + Node.js |
 
 *Analyzed with SonarQube. This is an application project focusing on functionality.*
 
 </div>
+
+## 🧪 Testing
+
+### Test Coverage
+
+```bash
+# Backend tests (Jest)
+cd server
+npm test                  # Run all tests
+npm run test:watch       # Watch mode
+npm run test:coverage    # Coverage report
+
+# Frontend tests (Vitest)
+cd client
+npm test                  # Run all tests
+npm run test:watch       # Watch mode
+npm run test:coverage    # Coverage report
+```
+
+### Test Structure
+
+```
+server/tests/
+├── health.test.js        # Health check endpoint tests
+├── database.test.js      # Database utility tests
+└── ...
+
+client/src/tests/
+├── App.test.jsx          # React component tests
+├── setup.js              # Test configuration
+└── ...
+```
+
+### CI/CD Testing
+
+Tests run automatically on every push via GitHub Actions:
+- ✅ Backend unit tests (Jest)
+- ✅ Frontend component tests (Vitest)
+- ✅ Coverage reports generated
+- ✅ Automated quality gates
 
 ## 🛠️ Tecnologias
 
