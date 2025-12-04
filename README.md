@@ -1,10 +1,17 @@
 # 🚀 DX01 - Fullstack Application
 
+[![Quality Gate](https://img.shields.io/badge/Quality%20Gate-Not%20Computed-lightgrey.svg)](https://sonarcloud.io/)
+[![Security](https://img.shields.io/badge/Security-A%20Rating-brightgreen.svg)](https://sonarcloud.io/)
+[![Reliability](https://img.shields.io/badge/Reliability-A%20Rating-brightgreen.svg)](https://sonarcloud.io/)
+[![Maintainability](https://img.shields.io/badge/Maintainability-A%20Rating-brightgreen.svg)](https://sonarcloud.io/)
+[![Code Lines](https://img.shields.io/badge/Lines%20of%20Code-833-blue.svg)](https://github.com/maringelix/dx01)
+
 Uma aplicação fullstack moderna com React + Vite no frontend e Node.js + Express no backend, pronta para deploy em produção.
 
 ## 📋 Índice
 
 - [Sobre](#sobre)
+- [Code Quality](#-code-quality)
 - [Tecnologias](#tecnologias)
 - [Pré-requisitos](#pré-requisitos)
 - [Instalação](#instalação)
@@ -23,6 +30,23 @@ DX01 é uma aplicação fullstack completa que demonstra:
 - ✅ CORS e segurança configurados
 - ✅ Hot reload em desenvolvimento
 - ✅ Pronto para containerização Docker
+
+## 📊 Code Quality
+
+<div align="center">
+
+| Metric | Rating | Issues | Status |
+|--------|--------|--------|--------|
+| **Security** | 🟢 A | 0 | Perfect |
+| **Reliability** | 🟢 A | 4 | Excellent |
+| **Maintainability** | 🟢 A | 8 | Excellent |
+| **Coverage** | ⚪ 0.0% | - | No tests yet |
+| **Duplications** | 🟢 0.0% | 0 | No duplicates |
+| **Lines of Code** | 📝 833 | - | React + Node.js |
+
+*Analyzed with SonarQube. This is an application project focusing on functionality.*
+
+</div>
 
 ## 🛠️ Tecnologias
 
