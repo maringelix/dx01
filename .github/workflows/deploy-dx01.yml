@@ -1,4 +1,4 @@
-name: 🚀 Deploy DX01 to AWS
+name: 🚀 Deploy DX01 Application
 
 on:
   push:
