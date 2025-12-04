@@ -1,4 +1,4 @@
-# 🚀 DX01 - Fullstack Application
+# 🚀 DX01 - Fullstack Application - 2025
 
 [![Quality Gate](https://img.shields.io/badge/Quality%20Gate-Not%20Computed-lightgrey.svg)](https://sonarcloud.io/)
 [![Security](https://img.shields.io/badge/Security-A%20Rating-brightgreen.svg)](https://sonarcloud.io/)
