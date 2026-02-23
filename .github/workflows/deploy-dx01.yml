@@ -1,15 +1,6 @@
 name: 🚀 Deploy DX01 Application
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'client/**'
-      - 'server/**'
-      - 'docker/**'
-      - 'Dockerfile'
-      - '.github/workflows/deploy-dx01.yml'
   workflow_dispatch:
     inputs:
       environment:

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-// Mock do app para testes
+// Mock Express app for isolated endpoint testing
 const createTestApp = () => {
   const app = express();
   

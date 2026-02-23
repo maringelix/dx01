@@ -39,7 +39,8 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/default.conf /etc/nginx/http.d/default.conf
 
 # Create nginx directories
-RUN mkdir -p /run/nginx /var/log/nginx
+RUN mkdir -p /run/nginx /var/log/nginx && \
+    chown -R node:node /run/nginx /var/log/nginx /app
 
 # Expose ports
 EXPOSE 80
@@ -52,4 +53,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
+USER node
 CMD ["/start.sh"]

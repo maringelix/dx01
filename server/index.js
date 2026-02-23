@@ -62,7 +62,7 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Health check endpoint (para o ALB da AWS)
+// Health check endpoint (ALB target)
 app.get('/health', async (req, res) => {
   const dbHealth = await getConnectionStatus();
   res.status(200).json({ 
@@ -169,7 +169,7 @@ app.post('/api/users',
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada' });
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // Error handler

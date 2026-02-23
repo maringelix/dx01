@@ -17,13 +17,13 @@ const dbConfig = {
   port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'dx01_dev',
   user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
+  password: process.env.DB_PASSWORD,
   max: 20, // Maximum number of connections in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
   // Enable SSL for AWS RDS
   ssl: process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com') ? {
-    rejectUnauthorized: false
+    rejectUnauthorized: true
   } : false
 };
 
