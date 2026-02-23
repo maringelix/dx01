@@ -69,15 +69,15 @@ function App() {
             <h2>🗄️ Status do Banco de Dados</h2>
             {healthData.database.connected ? (
               <>
-                <p>✅ <strong>Conexão:</strong> Conectado</p>
-                <p><strong>Versão:</strong> {healthData.database.version}</p>
+                <p>✅ <strong>Connection:</strong> Connected</p>
+                <p><strong>Version:</strong> {healthData.database.version}</p>
                 <p><strong>Pool Size:</strong> {healthData.database.poolSize}</p>
-                <p><strong>Conexões Idle:</strong> {healthData.database.idleConnections}</p>
+                <p><strong>Idle Connections:</strong> {healthData.database.idleConnections}</p>
                 <p><strong>Requests Aguardando:</strong> {healthData.database.waitingRequests}</p>
               </>
             ) : (
               <>
-                <p>❌ <strong>Conexão:</strong> Desconectado</p>
+                <p>❌ <strong>Connection:</strong> Disconnected</p>
                 {healthData.database.error && (
                   <p><strong>Erro:</strong> {healthData.database.error}</p>
                 )}
@@ -88,10 +88,10 @@ function App() {
 
         {healthData.stats && (
           <div className="card stats">
-            <h2>📊 Estatísticas</h2>
+            <h2>📊 Statistics</h2>
             <p><strong>Total de Visitas:</strong> {healthData.stats.totalVisits}</p>
             <p><strong>Visitas (24h):</strong> {healthData.stats.visitsLast24h}</p>
-            <p><strong>Usuários Cadastrados:</strong> {healthData.stats.totalUsers}</p>
+            <p><strong>Registered Users:</strong> {healthData.stats.totalUsers}</p>
           </div>
         )}
 

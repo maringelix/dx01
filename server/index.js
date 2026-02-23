@@ -85,7 +85,7 @@ app.get('/api', async (req, res) => {
   const stats = dbInitialized ? await getStats() : null;
   
   res.json({ 
-    message: 'Bem-vindo à API dx01! 🚀',
+    message: 'Welcome to dx01 API! 🚀',
     version: '2.0.0',
     database: dbInitialized ? 'connected' : 'not available',
     stats: stats
@@ -98,7 +98,7 @@ app.get('/api/health', async (req, res) => {
   
   res.status(200).json({ 
     status: 'healthy',
-    message: 'API está funcionando! 🚀',
+    message: 'API is running! 🚀',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     database: dbHealth,
@@ -157,7 +157,7 @@ app.post('/api/users',
       );
 
       res.status(201).json({
-        message: 'Usuário criado com sucesso no banco de dados! 🎉',
+        message: 'User created successfully! 🎉',
         user: result.rows[0]
       });
     } catch (error) {
