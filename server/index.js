@@ -3,16 +3,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import winston from 'winston';
-import { 
-  initializeDatabase, 
-  getConnectionStatus, 
-  recordVisit, 
-  getStats, 
+import {
+  initializeDatabase,
+  getConnectionStatus,
+  recordVisit,
+  getStats,
   query as dbQuery,
-  closePool 
+  closePool
 } from './database.js';
+import { requireAuth } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -56,11 +58,35 @@ let dbStatus = { connected: false };
 
 // Middlewares
 app.use(helmet());
+
+// CORS with strict allow-list (no wildcard fallback)
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  origin(origin, callback) {
+    // Allow non-browser requests (curl, server-to-server) when origin is undefined
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed by CORS'));
+  },
+  credentials: true,
 }));
+
 app.use(morgan('dev'));
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Rate limit for all /api/* routes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+app.use('/api', apiLimiter);
 
 // Health check endpoint (ALB target)
 app.get('/health', async (req, res) => {
@@ -106,7 +132,7 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAuth, async (req, res) => {
   try {
     if (!dbInitialized) {
       return res.json({
@@ -131,6 +157,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 app.post('/api/users',
+  requireAuth,
   [
     body('name').isString().isLength({ min: 1, max: 100 }).trim().escape(),
     body('role').isString().isLength({ min: 1, max: 100 }).trim().escape()
