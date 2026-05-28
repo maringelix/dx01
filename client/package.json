@@ -23,7 +23,7 @@
     "vite": "^5.0.8",
     "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.5",
-    "vitest": "^1.0.4",
+    "vitest": "^4.1.7",
     "jsdom": "^23.0.1"
   }
 }
