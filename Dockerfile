@@ -1,5 +1,8 @@
-# Multi-stage build for production-ready fullstack app
-FROM node:18-alpine AS builder
+# Multi-stage build for production-ready fullstack app.
+#
+# Base image pinned to a specific digest. Bumped from node:18-alpine
+# (EOL April 2025) to node:20 LTS (active maintenance until April 2026).
+FROM node:20.11.0-alpine3.19@sha256:2f46fd49c767554c089a5eb219115313b72748d8f62f5eccb58ef52bc36db4ad AS builder
 
 WORKDIR /app
 
@@ -19,8 +22,8 @@ COPY . .
 # Build frontend
 RUN cd client && npm run build
 
-# Production stage
-FROM node:18-alpine
+# Production stage (same pinned digest as builder).
+FROM node:20.11.0-alpine3.19@sha256:2f46fd49c767554c089a5eb219115313b72748d8f62f5eccb58ef52bc36db4ad
 
 WORKDIR /app
 
