@@ -15,6 +15,7 @@ import {
   closePool
 } from './database.js';
 import { requireAuth } from './middleware/auth.js';
+import { sanitizeError, sanitizeMessage } from './utils/sanitizeLogs.js';
 
 dotenv.config();
 
@@ -77,6 +78,18 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Per-request hard timeout. Avoids hanging requests piling up under load,
+// holding DB connections, and keeping Cloud-Run / ALB connections open.
+app.use((req, res, next) => {
+  req.setTimeout(30_000, () => {
+    if (!res.headersSent) {
+      res.status(503).json({ error: 'Request timeout' });
+    }
+    req.destroy();
+  });
+  next();
+});
 
 // Rate limit for all /api/* routes
 const apiLimiter = rateLimit({
@@ -151,7 +164,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
       count: result.rows.length
     });
   } catch (error) {
-    logger.error('Error fetching users', { error: error.message });
+    logger.error('Error fetching users', { error: sanitizeError(error) });
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -188,7 +201,7 @@ app.post('/api/users',
         user: result.rows[0]
       });
     } catch (error) {
-      logger.error('Error creating user', { error: error.message });
+      logger.error('Error creating user', { error: sanitizeError(error) });
       res.status(500).json({ error: 'Failed to create user' });
     }
   }
@@ -201,7 +214,7 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error', { error: err.message, stack: err.stack });
+  logger.error('Unhandled error', { error: sanitizeMessage(err.message), stack: sanitizeMessage(err.stack) });
   res.status(500).json({ error: 'Algo deu errado!' });
 });
 
