@@ -92,6 +92,9 @@ export async function query(text, params) {
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
     logger.debug('Executed query', { text, duration, rows: res.rowCount });
+    if (duration > 1000) {
+      logger.warn('Slow query detected', { text, duration, rows: res.rowCount });
+    }
     return res;
   } catch (error) {
     logger.error('Query error', { text, error: error.message });
