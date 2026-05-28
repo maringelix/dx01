@@ -1,6 +1,6 @@
-# dx01 — Fullstack Application (AWS / EKS)
+# dx01 — Fullstack Application (AWS / EC2 + ALB)
 
-Fullstack web application built with **React + Vite** (client) and **Node.js + Express** (server), backed by **PostgreSQL**. Designed for production deployment on **AWS EKS** via CI/CD.
+Fullstack web application built with **React + Vite** (client) and **Node.js + Express** (server), backed by **PostgreSQL**. Designed for production deployment on **AWS EC2 behind an ALB** via CI/CD (deploy through SSM; ECR for images). Infrastructure is provisioned by [tx01](https://github.com/maringelix/tx01).
 
 ## Architecture
 
