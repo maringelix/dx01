@@ -101,14 +101,24 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-// Health check endpoint (ALB target)
-app.get('/health', async (req, res) => {
-  const dbHealth = await getConnectionStatus();
-  res.status(200).json({ 
-    status: 'healthy',
+// Liveness probe (no external deps; ALB target keeps pings cheap).
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'alive',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: dbHealth
+  });
+});
+
+// Readiness probe (DB connectivity).
+app.get('/ready', async (req, res) => {
+  const dbHealth = await getConnectionStatus();
+  const ready = dbHealth?.connected === true;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not ready',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    database: dbHealth,
   });
 });
 
