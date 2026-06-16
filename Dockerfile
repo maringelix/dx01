@@ -56,4 +56,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
 
-CMD ["/start.sh"]
+# Override entrypoint to run our start script directly
+ENTRYPOINT []
+CMD ["/bin/sh", "/start.sh"]
