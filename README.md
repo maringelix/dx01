@@ -50,15 +50,54 @@ Required variables: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `
 
 ## Docker
 
+### Local Development (with docker-compose)
+
+The easiest way to run the full stack locally with PostgreSQL:
+
 ```bash
+# Start all services (PostgreSQL + app)
+docker-compose up --build
+
+# Or detached mode
+docker-compose up --build -d
+
+# Stop services
+docker-compose down -v
+```
+
+This starts:
+- **PostgreSQL** on port 5432 (persistent volume)
+- **dx01-app** on port 80 (nginx serving frontend + proxying to backend)
+
+### Docker Run (connect to external PostgreSQL)
+
+```bash
+# Build the image
 docker build -t dx01 .
-docker run -p 80:80 -p 3001:3001 \
+
+# Run with external PostgreSQL (e.g., on host)
+docker run -p 80:80 \
   -e DB_HOST=host.docker.internal \
   -e DB_PORT=5432 \
-  -e DB_NAME=myapp \
+  -e DB_NAME=dx01_dev \
   -e DB_USER=postgres \
   -e DB_PASSWORD=changeme \
+  -e CORS_ORIGIN=http://localhost \
+  -e JWT_SECRET=local_development_secret_minimum_32_chars \
   dx01
+```
+
+### Testing Protected Endpoints
+
+Endpoints `/api/users` require JWT authentication. Generate a test token:
+
+```bash
+# Using the container's Node.js
+docker exec -w /app/server dx01-app node -e 'console.log(require("jsonwebtoken").sign({sub:"test",role:"user"},process.env.JWT_SECRET,{issuer:process.env.JWT_ISSUER,expiresIn:"1h"}))'
+
+# Test with the token (replace TOKEN below)
+curl -H "Authorization: Bearer TOKEN" http://localhost/api/users
+curl -H "Authorization: Bearer TOKEN" -X POST http://localhost/api/users -H "Content-Type: application/json" -d '{"name":"Test","role":"user"}'
 ```
 
 ## Testing
