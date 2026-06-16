@@ -1,5 +1,4 @@
 #!/bin/sh
-
 echo "Starting DX01 Application..."
 
 echo "Starting Node.js backend..."
@@ -13,7 +12,7 @@ for i in $(seq 1 30); do
         echo "Backend is ready!"
         break
     fi
-    if [ $i -eq 30 ]; then
+    if [ "$i" = "30" ]; then
         echo "Backend failed to start"
         exit 1
     fi
@@ -21,10 +20,9 @@ for i in $(seq 1 30); do
 done
 
 echo "Starting Nginx..."
-# Run nginx as root (init container privilege), backend stays as node user
-nginx -g 'daemon off;' &
+nginx -g "daemon off;" &
 NGINX_PID=$!
 
-trap "echo 'Shutting down...'; kill $BACKEND_PID $NGINX_PID 2>/dev/null; exit 0" SIGTERM SIGINT
+trap 'echo Shutting down...; kill $BACKEND_PID $NGINX_PID 2>/dev/null; exit 0' SIGTERM SIGINT
 
 wait $NGINX_PID $BACKEND_PID
