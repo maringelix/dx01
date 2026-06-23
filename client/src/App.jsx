@@ -32,7 +32,7 @@ function App() {
     return (
       <div className="App">
         <header className="App-header">
-          <h1>DX01 - Fullstack Application</h1>
+          <h1>DX01 - Fullstack Application v2</h1>
           <p>Carregando...</p>
         </header>
       </div>
@@ -43,7 +43,7 @@ function App() {
     return (
       <div className="App">
         <header className="App-header">
-          <h1>DX01 - Fullstack Application</h1>
+          <h1>DX01 - Fullstack Application v2</h1>
           <div className="card error">
             <p>❌ {error}</p>
           </div>
@@ -55,7 +55,7 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>🚀 DX01 - Fullstack Application</h1>
+        <h1>🚀 DX01 - Fullstack Application v2</h1>
         
         <div className="card">
           <h2>✅ Status do Servidor</h2>
