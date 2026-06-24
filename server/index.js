@@ -142,6 +142,13 @@ app.get('/api', async (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
+  // Record visit if database is available
+  if (dbInitialized) {
+    const ip = req.ip || req.connection.remoteAddress;
+    const userAgent = req.get('user-agent');
+    await recordVisit(ip, userAgent, '/api/health');
+  }
+
   const dbHealth = await getConnectionStatus();
   const stats = dbInitialized ? await getStats() : null;
   
