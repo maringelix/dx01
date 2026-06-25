@@ -36,6 +36,9 @@ const logger = winston.createLogger({
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for correct IP when behind nginx
+app.set('trust proxy', true);
+
 // Database initialization
 let dbInitialized = false;
 let dbStatus = { connected: false };
@@ -126,7 +129,9 @@ app.get('/ready', async (req, res) => {
 app.get('/api', async (req, res) => {
   // Record visit if database is available
   if (dbInitialized) {
-    const ip = req.ip || req.connection.remoteAddress;
+    const realIp = req.get('X-Real-IP');
+    const forwarded = req.get('X-Forwarded-For');
+    const ip = forwarded ? forwarded.split(',')[0].trim() : (realIp || req.ip || req.connection.remoteAddress);
     const userAgent = req.get('user-agent');
     await recordVisit(ip, userAgent, '/api');
   }
@@ -144,7 +149,9 @@ app.get('/api', async (req, res) => {
 app.get('/api/health', async (req, res) => {
   // Record visit if database is available
   if (dbInitialized) {
-    const ip = req.ip || req.connection.remoteAddress;
+    const realIp = req.get('X-Real-IP');
+    const forwarded = req.get('X-Forwarded-For');
+    const ip = forwarded ? forwarded.split(',')[0].trim() : (realIp || req.ip || req.connection.remoteAddress);
     const userAgent = req.get('user-agent');
     await recordVisit(ip, userAgent, '/api/health');
   }
